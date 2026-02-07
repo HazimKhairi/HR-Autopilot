@@ -1,0 +1,33 @@
+// Prisma Schema for Invisible HR
+// This defines the database structure using SQLite for fast local testing
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Employee Model: Stores employee information
+model Employee {
+  id              Int       @id @default(autoincrement())
+  name            String
+  email           String    @unique // Email for authentication and lookup
+  role            String    // e.g., "Software Engineer", "Marketing Manager"
+  salary          Int       // Salary in local currency
+  country         String    // e.g., "Malaysia", "Singapore"
+  leaveBalance    Int       // Number of leave days remaining
+  visaExpiryDate  DateTime? // Optional: For employees requiring work visas
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Policy Model: Stores company policies for RAG (Retrieval Augmented Generation)
+model Policy {
+  id        Int      @id @default(autoincrement())
+  content   String   // The policy text (e.g., "Lunch allowance is RM20")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
