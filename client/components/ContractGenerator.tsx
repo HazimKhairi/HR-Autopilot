@@ -2,7 +2,7 @@
 // Allows users to generate employment contracts using AI
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface ContractData {
   name?: string
@@ -26,8 +26,9 @@ interface EmployeeData {
 
 export default function ContractGenerator() {
   const [useExisting, setUseExisting] = useState(true)
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState('hazim@company.com')
   const [employeeData, setEmployeeData] = useState<EmployeeData | null>(null)
+  const [overrideSalary, setOverrideSalary] = useState<number | undefined>(undefined)
   
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
@@ -80,6 +81,27 @@ export default function ContractGenerator() {
     }
   }
 
+  const analyzeProfile = () => {
+    if (!employeeData) {
+      setError('No employee selected to analyze')
+      return
+    }
+    // Open the profile page in a new tab (profile page supports searching by email)
+    const url = `/profile?email=${encodeURIComponent(employeeData.email)}`
+    if (typeof window !== 'undefined') {
+      window.open(url, '_blank')
+    }
+  }
+
+  // When employee data is loaded, prefill the override salary so it's editable
+  useEffect(() => {
+    if (employeeData && typeof employeeData.salary === 'number') {
+      setOverrideSalary(employeeData.salary)
+    } else {
+      setOverrideSalary(undefined)
+    }
+  }, [employeeData])
+
   const generateContract = async () => {
     setLoading(true)
     setError(null)
@@ -87,7 +109,7 @@ export default function ContractGenerator() {
 
     try {
       const requestBody = useExisting
-        ? { email: email.toLowerCase() }
+        ? { email: email.toLowerCase(), ...(overrideSalary ? { salary: overrideSalary } : {}) }
         : { customData: formData }
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contract/generate`, {
@@ -143,7 +165,7 @@ export default function ContractGenerator() {
           }`}
           style={{ borderRadius: '5px' }}
         >
-          Use Existing Employee
+          New Employee Offer
         </button>
         <button
           onClick={() => {
@@ -157,7 +179,7 @@ export default function ContractGenerator() {
           }`}
           style={{ borderRadius: '5px' }}
         >
-          Custom Data
+          Smart Negotia
         </button>
       </div>
 
@@ -195,6 +217,31 @@ export default function ContractGenerator() {
               <p className="text-sm">{employeeData.role} • {employeeData.country}</p>
             </div>
           )}
+            {/* Salary input with Analyze Profile button on the right */}
+            {useExisting && (
+              <div className="mt-3 flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary</label>
+                  <input
+                    type="number"
+                    value={overrideSalary ?? ''}
+                    onChange={(e) => setOverrideSalary(e.target.value ? parseInt(e.target.value) : undefined)}
+                    className="input-field w-full"
+                    placeholder={employeeData ? String(employeeData.salary) : 'e.g., 8000'}
+                  />
+                </div>
+                <div>
+                  <button
+                    onClick={analyzeProfile}
+                    className="btn-secondary"
+                    disabled={!employeeData}
+                    title={!employeeData ? 'Lookup an employee first' : 'Analyze profile'}
+                  >
+                    Analyze Profile
+                  </button>
+                </div>
+              </div>
+            )}
         </div>
       ) : (
         <div className="space-y-3 mb-4">

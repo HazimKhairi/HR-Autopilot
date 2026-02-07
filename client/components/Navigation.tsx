@@ -9,6 +9,7 @@ export default function Navigation() {
   const navItems = [
     { name: 'Dashboard', href: '/' },
     { name: 'Contract Generator', href: '/contract' },
+    { name: 'Employee Profile', href: '/profile' },
     { name: 'HR Assistant', href: '/chat' },
     { name: 'Compliance', href: '/compliance' },
     { name: 'Resume Parser', href: '/resume' },

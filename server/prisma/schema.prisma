@@ -16,10 +16,27 @@ model Employee {
   name            String
   email           String    @unique // Email for authentication and lookup
   role            String    // e.g., "Software Engineer", "Marketing Manager"
-  salary          Int       // Salary in local currency
+  salary          Int       // Monthly salary in local currency
   country         String    // e.g., "Malaysia", "Singapore"
   leaveBalance    Int       // Number of leave days remaining
   visaExpiryDate  DateTime? // Optional: For employees requiring work visas
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  resume          Resume?   // One-to-one relationship with Resume
+}
+
+// Resume Model: Stores employee resume and professional data
+model Resume {
+  id              Int       @id @default(autoincrement())
+  employeeId      Int       @unique // Foreign key to Employee
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  phone           String?   // Phone number
+  summary         String?   // Professional summary
+  skills          String?   // JSON array of skills (stored as string)
+  experience      String?   // JSON array of work experience
+  education       String?   // JSON array of education
+  resumeText      String?   // Full resume text
+  extractedData   String?   // Extracted structured data from AI
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }

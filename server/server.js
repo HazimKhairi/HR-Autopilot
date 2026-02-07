@@ -22,6 +22,7 @@ const docController = require('./controllers/docController');
 const chatController = require('./controllers/chatController');
 const complianceController = require('./controllers/complianceController');
 const employeeController = require('./controllers/employeeController');
+const profileController = require('./controllers/profileController');
 const resumeController = require('./controllers/resumeController');
 
 // Initialize the Express application
@@ -51,6 +52,14 @@ app.get('/', (req, res) => {
 // Employee Lookup Routes
 // ========================================
 app.get('/api/employee/by-email/:email', employeeController.getEmployeeByEmail);
+
+// ========================================
+// Employee Profile Routes
+// ========================================
+app.get('/api/profile', profileController.getAllProfiles);
+app.get('/api/profile/:id', profileController.getProfileById);
+app.get('/api/profile/by-email/:email', profileController.getProfileByEmail);
+app.post('/api/profile/:employeeId/resume', profileController.upsertResume);
 
 // ========================================
 // PHASE 1: Document Generation Routes

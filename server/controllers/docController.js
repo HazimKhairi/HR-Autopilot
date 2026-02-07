@@ -20,6 +20,7 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.1:latest'; // or 'mistr
 async function generateContract(req, res) {
   try {
     const { employeeId, email, customData } = req.body;
+    const overrideSalary = req.body.salary
 
     // If email provided, fetch employee data by email
     let employeeData;
@@ -56,7 +57,8 @@ async function generateContract(req, res) {
       });
     }
 
-    const { name, role, salary, country } = employeeData;
+    const { name, role, salary: empSalary, country } = employeeData;
+    const salary = overrideSalary ?? empSalary;
     const effectiveDate = req.body.effectiveDate || employeeData.effectiveDate || "1 MARCH 2026";
     const workLocation = req.body.workLocation || employeeData.workLocation || "Cyberjaya, Malaysia";
     const annualLeave = "14"; // Standard for Malaysia
@@ -206,10 +208,10 @@ async function generateTemplateContract(employeeData) {
     </div>
     
     <div class="section">
-        <h2>3. COMPENSATION</h2>
-        <p>Annual Salary: <strong>${salary}</strong> (${country} currency)</p>
-        <p>Payment: Monthly on the last working day</p>
-        <p>Benefits: As per ${country} labor laws and company policy</p>
+      <h2>3. COMPENSATION</h2>
+      <p>Monthly Salary: <strong>${salary}</strong> (${country} currency)</p>
+      <p>Payment: Monthly on the last working day</p>
+      <p>Benefits: As per ${country} labor laws and company policy</p>
     </div>
     
     <div class="section">
