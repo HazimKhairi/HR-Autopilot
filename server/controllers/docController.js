@@ -7,7 +7,7 @@ const puppeteer = require('puppeteer'); // For HTML -> PDF rendering
 const prisma = new PrismaClient();
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-const OLLAMA_CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL || 'llama3.2';
+const OLLAMA_CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL || 'llama3.1';
 
 /**
  * Generate Employment Contract using Ollama
@@ -106,36 +106,45 @@ Generate a complete, ready-to-use employment contract in HTML format:`;
     console.log('Calling Ollama to generate contract...');
     console.log(`Using model: ${OLLAMA_CHAT_MODEL}`);
 
-    const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: OLLAMA_CHAT_MODEL,
-        messages: [
-          { role: 'system', content: 'You are a legal expert specializing in employment law. Generate only HTML content, no explanations.' },
-          { role: 'user', content: prompt },
-        ],
-        stream: false,
-        options: {
-          temperature: 0,
-          num_predict: 4096,
-        },
-      }),
-    });
+    let generatedContract = '';
+    let usedFallback = false;
 
-    if (!response.ok) {
-      throw new Error(`Ollama error: ${response.statusText}`);
+    try {
+      const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: OLLAMA_CHAT_MODEL,
+          messages: [
+            { role: 'system', content: 'You are a legal expert specializing in employment law. Generate only HTML content, no explanations.' },
+            { role: 'user', content: prompt },
+          ],
+          stream: false,
+          options: {
+            temperature: 0,
+            num_predict: 4096,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      generatedContract = String(data.message?.content || '').trim();
+
+      if (!generatedContract) {
+        throw new Error('Ollama returned empty contract');
+      }
+
+      console.log('✅ Contract generated successfully using Ollama');
+    } catch (ollamaError) {
+      console.error('❌ Ollama generation failed:', ollamaError.message);
+      generatedContract = await generateTemplateContract({ name, role, salary, country });
+      usedFallback = true;
     }
 
-    const data = await response.json();
-    let generatedContract = data.message.content;
-
-    // Clean and format the response
-    generatedContract = generatedContract.trim();
-    
-    console.log('✅ Contract generated successfully using Ollama');
-
-    // Return the generated contract to the client
     res.json({
       success: true,
       contract: generatedContract,
@@ -144,27 +153,14 @@ Generate a complete, ready-to-use employment contract in HTML format:`;
         role,
         country,
         salary,
-        model: OLLAMA_CHAT_MODEL,
+        model: usedFallback ? 'template' : OLLAMA_CHAT_MODEL,
         generatedAt: new Date().toISOString(),
       },
+      warning: usedFallback ? 'Ollama unavailable, returned template contract' : undefined,
     });
   } catch (error) {
     console.error('❌ Error generating contract:', error.message);
     
-    // Check if Ollama is running
-    if (error.cause?.code === 'ECONNREFUSED') {
-      return res.status(503).json({
-        success: false,
-        error: 'Ollama service not running',
-        message: 'Please ensure Ollama is installed and running on localhost:11434',
-        instructions: [
-          '1. Install Ollama: brew install ollama',
-          '2. Run: ollama pull llama3.2',
-          '3. Start Ollama: ollama serve',
-        ]
-      });
-    }
-
     res.status(500).json({ 
       success: false,
       error: 'Failed to generate contract',
