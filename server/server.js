@@ -24,6 +24,14 @@ const complianceController = require('./controllers/complianceController');
 const employeeController = require('./controllers/employeeController');
 const resumeController = require('./controllers/resumeController');
 
+const multer = require('multer');
+
+// Configure Multer for memory storage
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
+
 // Initialize the Express application
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -77,7 +85,7 @@ app.get('/api/compliance/employee/:id', complianceController.getEmployeeComplian
 // ========================================
 // PHASE 4: Resume Extraction Routes
 // ========================================
-app.post('/api/resume/extract', resumeController.extractResumeData);
+app.post('/api/resume/extract', upload.single('resume'), resumeController.extractResumeData);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
