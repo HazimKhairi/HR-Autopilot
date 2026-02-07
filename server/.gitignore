@@ -1,5 +1,26 @@
+# Dependencies
 node_modules/
+
+# Environment variables
 .env
-prisma/*.db
-prisma/*.db-journal
+.env.local
+
+# Database
+*.db
+*.db-journal
+
+# Next.js build
+.next/
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Uploads
+uploads/
+
+# Package lock (optional - some teams include it, some don't)
+package-lock.json
