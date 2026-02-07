@@ -3,7 +3,19 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { SAMPLE_FILES, KBFile } from '@/lib/kbSample'
+
+type KBFile = {
+  id: string
+  filename: string
+  name: string
+  category: 'Policy' | 'Procedure' | 'FAQ' | 'Manual' | 'Other'
+  description: string
+  uploader: string
+  uploadDate: string
+  deletedAt?: string | null
+}
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
 export default function CategoryPage() {
   const params = useParams()
@@ -26,8 +38,16 @@ export default function CategoryPage() {
   const [editDesc, setEditDesc] = useState('')
 
   useEffect(() => {
-    const base = SAMPLE_FILES.filter(f => f.category === categoryTitle && !f.deletedAt)
-    setItems(base)
+    async function fetchCategory() {
+      try {
+        const res = await fetch(`${API_URL}/api/kb/files?category=${categoryTitle}`)
+        const data = await res.json()
+        if (data.success) setItems(data.files)
+      } catch {
+        console.error('Failed to fetch files')
+      }
+    }
+    fetchCategory()
   }, [categoryTitle])
 
   const filtered = useMemo(() => {
@@ -69,7 +89,7 @@ export default function CategoryPage() {
                 <td className="p-2">{new Date(f.uploadDate).toLocaleDateString()}</td>
                 <td className="p-2">
                   <a
-                    href={`/api/kb/files/${f.id}/download`}
+                    href={`${API_URL}/api/kb/files/${f.id}/download`}
                     target="_blank"
                     rel="noreferrer"
                     className="px-2 py-1 border rounded"

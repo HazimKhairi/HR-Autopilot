@@ -1,6 +1,20 @@
+// Polyfill for PDF.js in Node environment
+if (!global.DOMMatrix) {
+  global.DOMMatrix = class DOMMatrix {
+    constructor() {
+      this.a = 1; this.b = 0; this.c = 0; this.d = 1; this.e = 0; this.f = 0;
+    }
+  };
+}
+
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const { PDFParse } = require('pdf-parse');
+const mammoth = require('mammoth');
+const { getCollection } = require('../config/chromadb');
+const { generateEmbedding } = require('../utils/embeddings');
+const { chunkText } = require('../utils/chunker');
 const {
   CATEGORIES,
   ensureBaseDirs,
@@ -22,6 +36,58 @@ const upload = multer({
     else cb(new Error('Only .pdf, .docx, and .txt files are allowed'));
   },
 });
+
+async function extractText(buffer, originalname) {
+  const ext = path.extname(originalname).toLowerCase();
+  if (ext === '.txt') {
+    return buffer.toString('utf-8');
+  } else if (ext === '.pdf') {
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
+    return result.text;
+  } else if (ext === '.docx') {
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value;
+  }
+  return '';
+}
+
+async function embedFileToChromaDB(fileId, buffer, originalname) {
+  const text = await extractText(buffer, originalname);
+  if (!text.trim()) return 0;
+
+  const chunks = chunkText(text);
+  const ids = [];
+  const documents = [];
+  const embeddings = [];
+  const metadatas = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const embedding = await generateEmbedding(chunks[i]);
+    ids.push(`kb-${fileId}-chunk-${i}`);
+    documents.push(chunks[i]);
+    embeddings.push(embedding);
+    metadatas.push({ source: fileId, filename: originalname });
+  }
+
+  const collection = await getCollection();
+  await collection.add({ ids, documents, embeddings, metadatas });
+  console.log(`Embedded ${chunks.length} chunks for ${originalname}`);
+  return chunks.length;
+}
+
+async function removeVectorsFromChromaDB(fileId) {
+  try {
+    const collection = await getCollection();
+    const all = await collection.get({ where: { source: fileId } });
+    if (all.ids && all.ids.length > 0) {
+      await collection.delete({ ids: all.ids });
+      console.log(`Removed ${all.ids.length} vectors for ${fileId}`);
+    }
+  } catch (error) {
+    console.error(`Failed to remove vectors for ${fileId}:`, error.message);
+  }
+}
 
 async function uploadFile(req, res) {
   try {
@@ -51,6 +117,8 @@ async function uploadFile(req, res) {
 
     fs.writeFileSync(filepath, req.file.buffer);
 
+    const chunksEmbedded = await embedFileToChromaDB(filename, req.file.buffer, req.file.originalname);
+
     const entry = addIndexEntry({
       id: filename,
       filename,
@@ -62,7 +130,7 @@ async function uploadFile(req, res) {
       deletedAt: null,
     });
 
-    return res.json({ success: true, file: entry });
+    return res.json({ success: true, file: entry, chunksEmbedded });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
@@ -166,6 +234,9 @@ async function deleteFile(req, res) {
     const { id } = req.params;
     const updated = updateIndexEntry(id, { deletedAt: new Date().toISOString() });
     if (!updated) return res.status(404).json({ success: false, error: 'File not found' });
+
+    await removeVectorsFromChromaDB(id);
+
     return res.json({ success: true, file: updated });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
@@ -175,8 +246,20 @@ async function deleteFile(req, res) {
 async function restoreFile(req, res) {
   try {
     const { id } = req.params;
+    const { index, i } = findIndexEntry(id);
+    if (i < 0) return res.status(404).json({ success: false, error: 'File not found' });
+    const file = index.files[i];
+
     const updated = updateIndexEntry(id, { deletedAt: null });
     if (!updated) return res.status(404).json({ success: false, error: 'File not found' });
+
+    const dir = getCategoryFolder(file.category);
+    const filePath = path.join(dir, file.filename);
+    if (fs.existsSync(filePath)) {
+      const buffer = fs.readFileSync(filePath);
+      await embedFileToChromaDB(id, buffer, file.filename);
+    }
+
     return res.json({ success: true, file: updated });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
@@ -193,7 +276,10 @@ async function bulkDelete(req, res) {
     const results = [];
     for (const id of ids) {
       const updated = updateIndexEntry(id, { deletedAt: when });
-      if (updated) results.push(updated.id);
+      if (updated) {
+        await removeVectorsFromChromaDB(id);
+        results.push(updated.id);
+      }
     }
     return res.json({ success: true, deleted: results });
   } catch (error) {

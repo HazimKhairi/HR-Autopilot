@@ -20,7 +20,7 @@ Thumbs.db
 *.log
 
 # Uploads
-# uploads/
+uploads/
 
 # Package lock (optional - some teams include it, some don't)
 package-lock.json

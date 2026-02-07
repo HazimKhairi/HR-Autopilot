@@ -5,7 +5,6 @@ import './globals.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import Navigation from '@/components/Navigation'
-import ChatPanel from "@/components/ChatInterface";
 
 // Use Inter font from Google Fonts
 const inter = Inter({ subsets: ['latin'] })
@@ -54,7 +53,6 @@ export default function RootLayout({
           </div>
         </footer>
 
-        {/* <ChatPanel /> */}
       </body>
     </html>
   )

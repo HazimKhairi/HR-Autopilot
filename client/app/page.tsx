@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Folder } from 'lucide-react'
 
 type KBFile = {
   id: string
@@ -15,8 +14,17 @@ type KBFile = {
   deletedAt?: string | null
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 const CATEGORIES = ['Policy', 'Procedure', 'FAQ', 'Manual', 'Other'] as const
 const ACCENT = 'text-sky-600'
+
+function FolderIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    </svg>
+  )
+}
 
 function useToast() {
   const [msg, setMsg] = useState<string | null>(null)
@@ -31,10 +39,8 @@ function useToast() {
   return { msg, type, show }
 }
 
-import { SAMPLE_FILES, KBFile as KBFileShared } from '@/lib/kbSample'
-
 export default function KnowledgeBasePage() {
-  const [files, setFiles] = useState<KBFile[]>(SAMPLE_FILES as KBFileShared[])
+  const [files, setFiles] = useState<KBFile[]>([])
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<'All' | KBFile['category']>('All')
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'category'>('date')
@@ -52,10 +58,10 @@ export default function KnowledgeBasePage() {
   const undoTimer = useRef<any>(null)
   const [undoId, setUndoId] = useState<string | null>(null)
 
-  useEffect(() => { }, [])
+  useEffect(() => { fetchList() }, [])
 
   async function fetchList() {
-    const url = new URL('/api/kb/files', window.location.origin)
+    const url = new URL(`${API_URL}/api/kb/files`)
     url.searchParams.set('sortBy', sortBy)
     url.searchParams.set('sortDir', sortDir)
     const res = await fetch(url)
@@ -94,7 +100,7 @@ export default function KnowledgeBasePage() {
     form.append('uploader', 'admin')
     form.append('file', fileObj!)
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', '/api/kb/upload')
+    xhr.open('POST', `${API_URL}/api/kb/upload`)
     xhr.upload.onprogress = (evt) => {
       if (evt.lengthComputable) {
         setUploading(true)
@@ -145,7 +151,7 @@ export default function KnowledgeBasePage() {
   async function saveEdit(id: string) {
     const patch = editing[id]
     if (!patch) return
-    const res = await fetch(`/api/kb/files/${id}`, {
+    const res = await fetch(`${API_URL}/api/kb/files/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
@@ -161,7 +167,7 @@ export default function KnowledgeBasePage() {
   }
 
   async function softDelete(id: string) {
-    const res = await fetch(`/api/kb/files/${id}`, { method: 'DELETE' })
+    const res = await fetch(`${API_URL}/api/kb/files/${id}`, { method: 'DELETE' })
     const json = await res.json()
     if (json.success) {
       show('Deleted (undo available)', 'success')
@@ -177,7 +183,7 @@ export default function KnowledgeBasePage() {
   async function bulkDelete() {
     const ids = Object.entries(selected).filter(([, v]) => v).map(([id]) => id)
     if (ids.length === 0) return
-    const res = await fetch('/api/kb/files/bulk-delete', {
+    const res = await fetch(`${API_URL}/api/kb/files/bulk-delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids }),
@@ -193,7 +199,7 @@ export default function KnowledgeBasePage() {
   }
 
   async function restore(id: string) {
-    const res = await fetch(`/api/kb/files/${id}/restore`, { method: 'POST' })
+    const res = await fetch(`${API_URL}/api/kb/files/${id}/restore`, { method: 'POST' })
     const json = await res.json()
     if (json.success) {
       show('Restored', 'success')
@@ -316,7 +322,7 @@ export default function KnowledgeBasePage() {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded bg-gray-300 text-white flex items-center justify-center">
-                    <Folder size={16} />
+                    <FolderIcon size={16} />
                   </div>
                   <div>
                     <div className="text-sm font-medium text-[#333]">{c}</div>

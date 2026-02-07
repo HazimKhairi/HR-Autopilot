@@ -12,7 +12,6 @@ const complianceController = require('./controllers/complianceController');
 const employeeController = require('./controllers/employeeController');
 const profileController = require('./controllers/profileController');
 const resumeController = require('./controllers/resumeController');
-const knowledgeController = require('./controllers/knowledgeController');
 const kbController = require('./controllers/kbController');
 
 // Configure Multer for memory storage
@@ -43,7 +42,7 @@ app.get('/', (req, res) => {
       chat: '/api/chat',
       compliance: '/api/compliance/*',
       employee: '/api/employee/*',
-      knowledge: '/api/knowledge/*',
+      kb: '/api/kb/*',
     }
   });
 });
@@ -70,9 +69,6 @@ app.get('/api/compliance/check', complianceController.checkExpirations);
 app.get('/api/compliance/employee/:id', complianceController.getEmployeeCompliance);
 
 app.post('/api/resume/extract', upload.single('resume'), resumeController.extractResumeData);
-
-app.post('/api/knowledge/upload', upload.single('file'), knowledgeController.uploadDocument);
-app.get('/api/knowledge/documents', knowledgeController.listDocuments);
 
 // Knowledge-base management
 app.post('/api/kb/upload', kbController.upload.single('file'), kbController.uploadFile);

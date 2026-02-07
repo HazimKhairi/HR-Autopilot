@@ -29,6 +29,8 @@ type UploadedFile = {
   preview?: string;
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 export default function HomePage() {
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
@@ -52,6 +54,7 @@ export default function HomePage() {
   const [isClient, setIsClient] = useState(false);
   const chatPanelRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('hazim@company.com');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -60,39 +63,21 @@ export default function HomePage() {
     abortControllerRef.current = new AbortController();
 
     try {
-      //convert messages to API format
-      const apiMessages: ApiMessage[] = conversationHistory.map(msg => ({
-        role: msg.isUser ? 'user' : 'assistant',
-        content: msg.text
-      }));
-
-      //add the new user message
-      apiMessages.push({
-        role: 'user',
-        content: userMessage
-      });
-
-      const response = await fetch('/api/chat', {  //backend endpoint
+      const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          //add auth token from login system
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: apiMessages,
-          //add user context for personalized responses
-          userContext: {
-            userId: localStorage.getItem('userId'),
-            employeeId: localStorage.getItem('employeeId'),
-            //if have any hr specific context
-          }
+          message: userMessage,
+          email: email,
         }),
         signal: abortControllerRef.current.signal,
       });
 
       const data = await response.json();
-      return data.response; // Adjust based on your backend response structure
+      if (data.success) {
+        return data.response;
+      }
+      return data.error || "Something went wrong. Please try again.";
 
     } catch (error: any) {
       if (error.name === 'AbortError') {
