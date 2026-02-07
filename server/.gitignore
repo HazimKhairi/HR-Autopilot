@@ -23,4 +23,4 @@ Thumbs.db
 uploads/
 
 # Package lock (optional - some teams include it, some don't)
-package-lock.json
+# package-lock.json
