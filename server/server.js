@@ -13,6 +13,7 @@ const employeeController = require('./controllers/employeeController');
 const profileController = require('./controllers/profileController');
 const resumeController = require('./controllers/resumeController');
 const kbController = require('./controllers/kbController');
+const smartContractController = require('./controllers/smartContractController');
 
 // Configure Multer for memory storage
 const upload = multer({
@@ -62,6 +63,7 @@ app.post('/api/profile/:employeeId/resume', profileController.upsertResume);
 // When the Frontend sends a POST request to '/api/contract/generate',
 // run the 'generateContract' function in the docController.
 app.post('/api/contract/generate', docController.generateContract);
+app.post('/api/offer-letter/generate', docController.generateOfferLetter);
 app.post('/api/contract/render-pdf', docController.renderHtmlToPdf);
 
 app.post('/api/chat', chatController.chat);
@@ -69,6 +71,7 @@ app.get('/api/compliance/check', complianceController.checkExpirations);
 app.get('/api/compliance/employee/:id', complianceController.getEmployeeCompliance);
 
 app.post('/api/resume/extract', upload.single('resume'), resumeController.extractResumeData);
+app.post('/api/smart-contract/analyze', smartContractController.analyzeSmartContract);
 
 // Knowledge-base management
 app.post('/api/kb/upload', kbController.upload.single('file'), kbController.uploadFile);

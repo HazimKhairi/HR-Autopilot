@@ -241,6 +241,184 @@ async function generateTemplateContract(employeeData) {
 </html>`;
 }
 
+async function generateOfferLetter(req, res) {
+  try {
+    const { employeeId, email, customData } = req.body;
+    const overrideSalary = req.body.salary;
+
+    let employeeData;
+    if (email) {
+      employeeData = await prisma.employee.findUnique({
+        where: { email: email.toLowerCase() },
+      });
+
+      if (!employeeData) {
+        return res.status(404).json({
+          success: false,
+          error: 'Employee not found with this email address',
+        });
+      }
+    } else if (employeeId) {
+      employeeData = await prisma.employee.findUnique({
+        where: { id: parseInt(employeeId) },
+      });
+
+      if (!employeeData) {
+        return res.status(404).json({
+          success: false,
+          error: 'Employee not found',
+        });
+      }
+    } else if (customData) {
+      employeeData = customData;
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Either email, employeeId, or customData must be provided',
+      });
+    }
+
+    const { name, role, salary: empSalary, country } = employeeData;
+    const salary = overrideSalary ?? empSalary;
+    const effectiveDate = req.body.effectiveDate || employeeData.effectiveDate || '1 MARCH 2026';
+    const workLocation = req.body.workLocation || employeeData.workLocation || 'Cyberjaya, Malaysia';
+
+    const prompt = `Create a professional HTML-formatted offer letter.
+
+OFFER LETTER DETAILS:
+- Candidate Name: ${name}
+- Job Role: ${role}
+- Country: ${country}
+- Monthly Salary: ${salary} (local currency)
+- Start Date: ${effectiveDate}
+- Work Location: ${workLocation}
+
+REQUIREMENTS:
+1. Write a formal offer letter in HTML format
+2. Include compensation, start date, location, reporting line, and acceptance instructions
+3. Use a friendly but professional tone
+4. Add CSS styling for clean layout
+5. Use the values provided above to fill in every field
+6. Include a signatures section at the end
+
+FORMAT:
+- Use <!DOCTYPE html>
+- Include <head> with basic CSS
+- Use semantic HTML tags
+
+Generate a complete, ready-to-send offer letter in HTML format:`;
+
+    let generatedLetter = '';
+    let usedFallback = false;
+
+    try {
+      const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: OLLAMA_CHAT_MODEL,
+          messages: [
+            { role: 'system', content: 'Generate only HTML content, no explanations.' },
+            { role: 'user', content: prompt },
+          ],
+          stream: false,
+          options: {
+            temperature: 0,
+            num_predict: 2048,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      generatedLetter = String(data.message?.content || '').trim();
+
+      if (!generatedLetter) {
+        throw new Error('Ollama returned empty offer letter');
+      }
+    } catch (ollamaError) {
+      generatedLetter = await generateTemplateOfferLetter({ name, role, salary, country, effectiveDate, workLocation });
+      usedFallback = true;
+    }
+
+    res.json({
+      success: true,
+      offerLetter: generatedLetter,
+      metadata: {
+        employee: name,
+        role,
+        country,
+        salary,
+        model: usedFallback ? 'template' : OLLAMA_CHAT_MODEL,
+        generatedAt: new Date().toISOString(),
+      },
+      warning: usedFallback ? 'Ollama unavailable, returned template offer letter' : undefined,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate offer letter',
+      message: error.message,
+    });
+  }
+}
+
+async function generateTemplateOfferLetter({ name, role, salary, country, effectiveDate, workLocation }) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offer Letter - ${name}</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; margin: 40px; color: #111827; }
+    .header { border-bottom: 2px solid #1f2937; padding-bottom: 16px; margin-bottom: 24px; }
+    .section { margin: 24px 0; }
+    .highlight { background: #f3f4f6; padding: 12px 16px; border-radius: 6px; }
+    .signature { margin-top: 60px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Offer Letter</h1>
+    <p>Date: ${effectiveDate}</p>
+  </div>
+
+  <p>Dear ${name},</p>
+
+  <p>We are pleased to offer you the position of <strong>${role}</strong> with our company in ${country}. We believe your experience and skills will be a valuable addition to the team.</p>
+
+  <div class="section highlight">
+    <p><strong>Position:</strong> ${role}</p>
+    <p><strong>Start Date:</strong> ${effectiveDate}</p>
+    <p><strong>Work Location:</strong> ${workLocation}</p>
+    <p><strong>Monthly Salary:</strong> ${salary} (${country} currency)</p>
+  </div>
+
+  <div class="section">
+    <p>Your role will report to the Head of Department. This offer is contingent upon successful completion of any required background checks and verification of employment eligibility.</p>
+  </div>
+
+  <div class="section">
+    <p>Please confirm your acceptance by signing below. We look forward to welcoming you to the team.</p>
+  </div>
+
+  <div class="signature">
+    <p>_________________________</p>
+    <p><strong>Employer Representative</strong></p>
+    <p>Date: ___________________</p>
+
+    <p style="margin-top: 40px;">_________________________</p>
+    <p><strong>${name}</strong></p>
+    <p>Date: ___________________</p>
+  </div>
+</body>
+</html>`;
+}
+
 // Render arbitrary HTML (from request body) to PDF and return as attachment
 async function renderHtmlToPdf(req, res) {
   try {
@@ -266,5 +444,7 @@ async function renderHtmlToPdf(req, res) {
 module.exports = {
   generateContract,
   generateTemplateContract,
+  generateOfferLetter,
+  generateTemplateOfferLetter,
   renderHtmlToPdf,
 };

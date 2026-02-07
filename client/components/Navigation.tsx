@@ -10,6 +10,7 @@ export default function Navigation() {
     { name: 'Dashboard', href: '/' },
     { name: 'Contract Generator', href: '/contract' },
     { name: 'Employee Profile', href: '/profile' },
+    { name: 'Smart Contract', href: '/smart-contract' },
     { name: 'HR Assistant', href: '/chat' },
     { name: 'Compliance', href: '/compliance' },
     { name: 'Resume Parser', href: '/resume' },
