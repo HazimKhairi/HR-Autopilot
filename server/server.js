@@ -22,6 +22,7 @@ const docController = require('./controllers/docController');
 const chatController = require('./controllers/chatController');
 const complianceController = require('./controllers/complianceController');
 const employeeController = require('./controllers/employeeController');
+const resumeController = require('./controllers/resumeController');
 
 // Initialize the Express application
 const app = express();
@@ -70,6 +71,11 @@ app.post('/api/chat', chatController.chat);
 // ========================================
 app.get('/api/compliance/check', complianceController.checkExpirations);
 app.get('/api/compliance/employee/:id', complianceController.getEmployeeCompliance);
+
+// ========================================
+// PHASE 4: Resume Extraction Routes
+// ========================================
+app.post('/api/resume/extract', resumeController.extractResumeData);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
