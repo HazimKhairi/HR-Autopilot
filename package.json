@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "chromadb": "^3.2.2",
+    "chromadb-default-embed": "^2.14.0",
+    "mammoth": "^1.11.0",
+    "multer": "^2.0.2",
+    "pdf-parse": "^2.4.5"
+  }
+}

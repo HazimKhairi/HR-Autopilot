@@ -11,6 +11,7 @@ export default function Navigation() {
     { name: 'Contract Generator', href: '/contract' },
     { name: 'HR Assistant', href: '/chat' },
     { name: 'Compliance', href: '/compliance' },
+    { name: 'Resume Parser', href: '/resume' },
   ]
 
   return (
