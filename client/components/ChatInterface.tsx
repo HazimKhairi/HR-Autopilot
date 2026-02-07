@@ -1,237 +1,129 @@
-// app/page.tsx
-"use client";
+// Chat Interface Component - PHASE 2
+// Provides a conversational UI for employees to ask HR questions
+'use client'
 
-import { useState, useRef, useEffect } from 'react';
-import { X, Send, Bot, User, ChevronRight, Sparkles, Pin, FileText, Paperclip, ChevronLeft } from 'lucide-react';
+import { useState } from 'react'
 
-type Message = {
-    id: number;
-    text: string;
-    isUser: boolean;
-};
+interface Message {
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string
+}
 
-type QuickAsk = {
-    id: number;
-    text: string;
-};
+interface EmployeeData {
+  id: number
+  name: string
+  email: string
+  role: string
+}
 
-type ApiMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-};
+export default function ChatInterface() {
+  // STATE: This is where we store data that changes over time.
+  // When state updates, React re-renders (updates) the UI.
+  const [email, setEmail] = useState('') // The user's input email
+  const [employeeData, setEmployeeData] = useState<EmployeeData | null>(null) // Logged-in user info
+  const [messages, setMessages] = useState<Message[]>([]) // List of chat messages
+  const [input, setInput] = useState('') // Current message being typed
+  const [loading, setLoading] = useState(false) // Is the simple AI thinking?
+  const [lookupLoading, setLookupLoading] = useState(false) // Are we verifying the email?
+  const [error, setError] = useState<string | null>(null) // Any error messages to show
 
-type UploadedFile = {
-    id: string;
-    name: string;
-    size: number;
-    type: string;
-    preview?: string;
-};
+  const loginEmployee = async () => {
+    if (!email.trim()) {
+      setError('Please enter an email address')
+      return
+    }
 
-export default function HomePage() {
-    const [isChatOpen, setIsChatOpen] = useState(false);
-    const [isClosing, setIsClosing] = useState(false);
-    const [message, setMessage] = useState('');
-    const [messages, setMessages] = useState<Message[]>([
-        // { id: 1, text: 'Hello! How can I assist you today?', isUser: false },
-        // { id: 2, text: 'I need help with your services', isUser: true },
-        // { id: 3, text: 'Of course! I can help you with that. Our platform offers various AI-powered tools to streamline your workflow. What specifically are you looking for?', isUser: false },
-        // { id: 4, text: 'Can you explain the pricing?', isUser: true },
-        // { id: 5, text: 'We offer tiered pricing plans starting from $29/month for basic features. The professional plan at $79/month includes advanced analytics and priority support.', isUser: false },
-        // { id: 6, text: 'That sounds reasonable. What about customization options?', isUser: true },
-        // { id: 7, text: 'Our enterprise plan includes full customization and API access. Would you like me to connect you with our sales team for a personalized demo?', isUser: false },
-    ]);
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const sidebarRef = useRef<HTMLDivElement>(null);
-    const chatMessagesRef = useRef<HTMLDivElement>(null);
-    const [isClient, setIsClient] = useState(false);
-    const chatPanelRef = useRef<HTMLDivElement>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    setLookupLoading(true)
+    setError(null)
 
-    const callLLMApi = async (userMessage: string, conversationHistory: Message[]) => {
-        setIsLoading(true);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/employee/by-email/${encodeURIComponent(email)}`)
+      const data = await response.json()
 
-        try {
-            //convert messages to API format
-            const apiMessages: ApiMessage[] = conversationHistory.map(msg => ({
-                role: msg.isUser ? 'user' : 'assistant',
-                content: msg.text
-            }));
+      if (data.success) {
+        setEmployeeData(data.employee)
+        setError(null)
+        setMessages([{
+          role: 'assistant',
+          content: `Hi ${data.employee.name}! I'm your HR Assistant. How can I help you today?`,
+          timestamp: new Date().toISOString(),
+        }])
+      } else {
+        throw new Error(data.error || 'Employee not found')
+      }
+    } catch (err: any) {
+      console.error('Employee login error:', err)
+      setError(err.message)
+      setEmployeeData(null)
+    } finally {
+      setLookupLoading(false)
+    }
+  }
 
-            //add the new user message
-            apiMessages.push({
-                role: 'user',
-                content: userMessage
-            });
+  // Send message to backend chat API
+  const sendMessage = async () => {
+    if (!input.trim() || !employeeData) return
 
-            const response = await fetch('/api/chat', {  //backend endpoint
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    //add auth token from login system
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-                },
-                body: JSON.stringify({
-                    messages: apiMessages,
-                    //add user context for personalized responses
-                    userContext: {
-                        userId: localStorage.getItem('userId'),
-                        employeeId: localStorage.getItem('employeeId'),
-                        //if have any hr specific context
-                    }
-                }),
-            });
+    const userMessage: Message = {
+      role: 'user',
+      content: input,
+      timestamp: new Date().toISOString(),
+    }
 
-            const data = await response.json();
-            return data.response; // Adjust based on your backend response structure
+    // Add user message to chat
+    setMessages(prev => [...prev, userMessage])
+    setInput('')
+    setLoading(true)
 
-        } catch (error) {
-            console.error('LLM API Error:', error);
-            return "I'm having trouble connecting right now. Please try again.";
-        } finally {
-            setIsLoading(false);
+    try {
+      // Call backend chat API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: input,
+          email: employeeData.email,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: data.response,
+          timestamp: data.timestamp,
         }
-    };
+        setMessages(prev => [...prev, assistantMessage])
+      } else {
+        throw new Error(data.error || 'Failed to get response')
+      }
+    } catch (error: any) {
+      console.error('Chat error:', error)
+      const errorMessage: Message = {
+        role: 'assistant',
+        content: `Sorry, I encountered an error: ${error.message}`,
+        timestamp: new Date().toISOString(),
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
+      setLoading(false)
+    }
+  }
 
-    const quickAskOptions: QuickAsk[] = [
-        { id: 1, text: 'Annual leaves i have?' },
-        { id: 2, text: 'Can I expense coworking space?"' },
-        { id: 3, text: 'When am I eligible for promotion?"' },
-        { id: 4, text: 'Can I carry forward m annual leaves?' },
-        { id: 5, text: 'What benefits am I eligible for?' },
-        { id: 6, text: 'What is the dress code policy?' },
-        { id: 7, text: 'Request payslip' },
-    ];
-
-    const scrollToBottom = () => {
-        if (isClient) {
-            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }
-    };
-
-    useEffect(() => {
-        setIsClient(true);
-        scrollToBottom();
-    }, [messages]);
-
-    const handleCloseChat = () => {
-        setIsClosing(true);
-        setTimeout(() => {
-            setIsChatOpen(false);
-            setIsClosing(false);
-        }, 300);
-    };
-
-    const handleSend = async () => {
-        if (message.trim() === '' && uploadedFiles.length === 0) return;
-
-        let finalMessage = message;
-
-        //uploaded file info
-        if (uploadedFiles.length > 0) {
-            const fileList = uploadedFiles.map(file => file.name).join(', ');
-            finalMessage = message.trim()
-                ? `${message}\n\nAttachments: ${fileList}`
-                : `Uploaded files: ${fileList}`;
-        }
-
-        const newMessage: Message = {
-            id: messages.length + 1,
-            text: finalMessage,
-            isUser: true,
-        };
-
-        setMessages([...messages, newMessage]);
-        const currentMessage = message;
-        setMessage('');
-        setUploadedFiles([]);//auto clear file after send
-
-
-        const aiResponseText = await callLLMApi(currentMessage, messages);
-
-        const aiResponse: Message = {
-            id: messages.length + 2,
-            text: aiResponseText,
-            isUser: false,
-        };
-        setMessages(prev => [...prev, aiResponse]);
-    };
-
-    const handleQuickAsk = async (text: string) => {
-        const newMessage: Message = {
-            id: messages.length + 1,
-            text,
-            isUser: true,
-        };
-
-        setMessages([...messages, newMessage]);
-
-        const aiResponseText = await callLLMApi(text, messages);
-
-        const aiResponse: Message = {
-            id: messages.length + 2,
-            text: aiResponseText,
-            isUser: false,
-        };
-        setMessages(prev => [...prev, aiResponse]);
-    };
-
-    const handleKeyPress = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
-        }
-    };
-
-    const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setMessage(e.target.value);
-        if (textareaRef.current && isClient) {
-            textareaRef.current.style.height = 'auto';
-            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-            setIsExpanded(textareaRef.current.scrollHeight > 40);
-        }
-    };
-
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files) return;
-
-        const newFiles: UploadedFile[] = Array.from(files).map((file, index) => ({
-            id: `${Date.now()}-${index}`,
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
-        }));
-
-        setUploadedFiles(prev => [...prev, ...newFiles]);
-        e.target.value = ''; //reset input
-    };
-
-    const removeFile = (id: string) => {
-        setUploadedFiles(prev => prev.filter(file => file.id !== id));
-    };
-
-    const formatFileSize = (bytes: number) => {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    };
-
-    const toggleSidebar = () => {
-        setIsSidebarOpen(!isSidebarOpen);
-    };
-
-    const handleFileButtonClick = () => {
-        fileInputRef.current?.click();
-    };
+  // Handle Enter key press
+  // This lets users hit "Enter" to send, instead of clicking the button.
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) { // Shift+Enter usually means new line, so we ignore it
+      e.preventDefault() // Stop the default action (like adding a new line)
+      if (employeeData) {
+        sendMessage()
+      } else {
+        loginEmployee()
+      }
+    }
+  }
 
     return (
         <div className="min-h-screen bg-[#fafafa] p-4 md:p-8">
@@ -487,119 +379,11 @@ export default function HomePage() {
                                             )}
                                         </div>
 
-                                        {/*send button*/}
-                                        <button
-                                            onClick={handleSend}
-                                            disabled={!message.trim() && uploadedFiles.length === 0}
-                                            className={`p-3 rounded-full transition-all duration-200 ${message.trim() || uploadedFiles.length > 0
-                                                ? 'bg-[#ff6b6b] hover:bg-[#ff5252] shadow-md hover:shadow-lg hover:scale-105'
-                                                : 'bg-gray-200 cursor-not-allowed'
-                                                }`}
-                                            aria-label="Send message"
-                                        >
-                                            <Send size={20} className="text-white" />
-                                        </button>
-                                    </div>
-                                    <p className="text-xs text-gray-500 font-light mt-3 text-center">
-                                        Press Enter to send • Shift+Enter for new line • Max 500 characters
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </>
-            )}
-
-            <style dangerouslySetInnerHTML={{
-                __html: `
-  @keyframes slideIn {
-    from {
-      transform: translateY(100%) translateX(0);
-      opacity: 0;
-    }
-    to {
-      transform: translateY(0) translateX(0);
-      opacity: 1;
-    }
-  }
-  
-  @keyframes slideOut {
-    from {
-      transform: translateY(0) translateX(0);
-      opacity: 1;
-    }
-    to {
-      transform: translateY(100%) translateX(0);
-      opacity: 0;
-    }
-  }
-  
-  .animate-slideIn {
-    animation: slideIn 0.3s ease-out;
-  }
-  
-  .animate-slideOut {
-    animation: slideOut 0.3s ease-in;
-  }
-  
-  .overflow-y-auto::-webkit-scrollbar {
-    width: 6px;
-  }
-  
-  .overflow-y-auto::-webkit-scrollbar-track {
-    background: transparent;
-    border-radius: 3px;
-  }
-  
-  .overflow-y-auto::-webkit-scrollbar-thumb {
-    background: #ffcccc;
-    border-radius: 3px;
-    transition: background 0.2s;
-  }
-  
-  .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-    background: #ffb3b3;
-  }
-  
-  .overflow-y-auto:first-of-type::-webkit-scrollbar-thumb {
-    background: #ffd6d6;
-  }
-  
-  .overflow-y-auto:first-of-type::-webkit-scrollbar-thumb:hover {
-    background: #ffb3b3;
-  }
-  
-  textarea {
-    font-family: inherit;
-    line-height: 1.5;
-  }
-  
-  .line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  
-  button, textarea, div {
-    transition-property: all;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 200ms;
-  }
-  
-  @keyframes bounce {
-    0%, 100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-5px);
-    }
-  }
-  
-  .animate-bounce {
-    animation: bounce 1s infinite;
-  }
-`}} />
-        </div>
-    );
+          <div className="mt-2 text-xs text-gray-500">
+            Try asking: "How much leave do I have?" or "What is the lunch policy?"
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
