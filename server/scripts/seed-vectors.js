@@ -1,60 +1,51 @@
-require('dotenv').config();
-const { PrismaClient } = require('@prisma/client');
-const { pinecone, index, indexName } = require('../config/pinecone');
-const { generateEmbedding } = require('../utils/embeddings');
+require('dotenv').config();                     
+const { PrismaClient } = require('@prisma/client');                      
+const { getCollection } = require('../config/chromadb');                  
+const { generateEmbedding } = require('../utils/embeddings'); 
 
-const prisma = new PrismaClient();
+const prima = new PrismaClient();
+
 
 async function seedVectors() {
-  try {
-    console.log('🌱 Starting vector seeding...');
-
-    // 1. Fetch all policies from the database
+  try{
+    console.log('Start seeding data')
+    //fetch all policies from sqlite 
     const policies = await prisma.policy.findMany();
-    console.log(`📚 Found ${policies.length} policies to index.`);
+     console.log(`Policies found: ${policies.length}`)
 
-    if (policies.length === 0) {
-      console.log('⚠️ No policies found. Run "npm run seed" first.');
+     if(policies.length == 0){
+      console.log('no policies found');
       return;
-    }
+     }
 
-    // 2. Prepare vectors
-    const vectors = [];
-    
-    // Re-target index to ensure it's fresh
-    const targetIndex = pinecone.index(indexName);
+     //prepare parallel arrays for chromadb
+     const ids = [];
+     const documents = [];
+     const embeddings = [];
+     const metadatas = [];
 
-    for (const policy of policies) {
-      console.log(`🧠 Generating embedding for policy ID: ${policy.id}...`);
-      
+     for (const policy of policies){
       const embedding = await generateEmbedding(policy.content);
-      
-      vectors.push({
-        id: `policy-${policy.id}`,
-        values: embedding,
-        metadata: {
-          type: 'policy',
-          content: policy.content,
-          originalId: policy.id
-        }
-      });
-    }
+      embeddings.push(embedding)
+      metadatas.push({type:'policy',originalId: policy.id});
+     }
 
-    // 3. Upsert to Pinecone
-    if (vectors.length > 0) {
-      console.log(`🚀 Upserting ${vectors.length} vectors to Pinecone...`);
-      // Batching is good practice, but for small datasets, one go is fine
-      await targetIndex.upsert({ records: vectors });
-      console.log('✅ Upsert complete!');
-    }
+     //add to chromadb
+     const collection = await getCollection();
 
-  } catch (error) {
-    console.error('❌ Error seeding vectors:', error);
-  } finally {
+     await collection.add({
+      ids,
+      documents,
+      embeddings,
+      metadatas
+     });
+
+     console.log('done seeding')
+  }catch(error){
+    console.error(error)
+    throw error
+  }finally{
     await prisma.$disconnect();
-    // process.exit() is often needed with async scripts
     process.exit();
   }
 }
-
-seedVectors();

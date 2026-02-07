@@ -54,7 +54,7 @@ export default function RootLayout({
           </div>
         </footer>
 
-        <ChatPanel />
+        {/* <ChatPanel /> */}
       </body>
     </html>
   )
