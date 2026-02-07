@@ -12,6 +12,7 @@ const complianceController = require('./controllers/complianceController');
 const employeeController = require('./controllers/employeeController');
 const resumeController = require('./controllers/resumeController');
 const knowledgeController = require('./controllers/knowledgeController');
+const kbController = require('./controllers/kbController');
 
 // Configure Multer for memory storage
 const upload = multer({
@@ -57,6 +58,15 @@ app.post('/api/resume/extract', upload.single('resume'), resumeController.extrac
 
 app.post('/api/knowledge/upload', upload.single('file'), knowledgeController.uploadDocument);
 app.get('/api/knowledge/documents', knowledgeController.listDocuments);
+
+// Knowledge-base management
+app.post('/api/kb/upload', kbController.upload.single('file'), kbController.uploadFile);
+app.get('/api/kb/files', kbController.listFiles);
+app.get('/api/kb/files/:id/download', kbController.downloadFile);
+app.put('/api/kb/files/:id', kbController.updateFile);
+app.delete('/api/kb/files/:id', kbController.deleteFile);
+app.post('/api/kb/files/:id/restore', kbController.restoreFile);
+app.post('/api/kb/files/bulk-delete', kbController.bulkDelete);
 
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
