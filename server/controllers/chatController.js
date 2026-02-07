@@ -55,7 +55,7 @@ ${context}`;
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: process.env.OLLAMA_CHAT_MODEL || 'llama3.2',
+        model: process.env.OLLAMA_CHAT_MODEL || 'llama3.1',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message },
