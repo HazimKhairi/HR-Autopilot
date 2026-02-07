@@ -22,6 +22,7 @@ const docController = require('./controllers/docController');
 const chatController = require('./controllers/chatController');
 const complianceController = require('./controllers/complianceController');
 const employeeController = require('./controllers/employeeController');
+const resumeController = require('./controllers/resumeController');
 
 // Initialize the Express application
 const app = express();
@@ -57,6 +58,8 @@ app.get('/api/employee/by-email/:email', employeeController.getEmployeeByEmail);
 // When the Frontend sends a POST request to '/api/contract/generate',
 // run the 'generateContract' function in the docController.
 app.post('/api/contract/generate', docController.generateContract);
+// Render arbitrary HTML to PDF (expects { html, filename } in body)
+app.post('/api/contract/render-pdf', docController.renderHtmlToPdf);
 
 // ========================================
 // PHASE 2: Conversational HR Assistant Routes
@@ -70,6 +73,11 @@ app.post('/api/chat', chatController.chat);
 // ========================================
 app.get('/api/compliance/check', complianceController.checkExpirations);
 app.get('/api/compliance/employee/:id', complianceController.getEmployeeCompliance);
+
+// ========================================
+// PHASE 4: Resume Extraction Routes
+// ========================================
+app.post('/api/resume/extract', resumeController.extractResumeData);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -1,28 +1,27 @@
-const OpenAI = require('openai');
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434'
 
-/**
- * Generate embeddings for a given text
- * @param {string} text - The input text to embed
- * @returns {Promise<number[]>} - The embedding vector
- */
 async function generateEmbedding(text) {
   try {
-    const response = await openai.embeddings.create({
-      model: 'text-embedding-3-small', // Cost-effective and high performance
-      input: text.replace(/\n/g, ' '), // Normalize newlines
-    });
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/embeddings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'nomic-embed-text',
+        prompt: text.replace(/\n/g, '')
+      })
+    },);
 
-    return response.data[0].embedding;
+    if (!response.ok) {
+      throw new Error(`Ollama error: ${response.error}`);
+    }
+
+    const data = await response.json();
+    return data.embedding;
   } catch (error) {
-    console.error('Error generating embedding:', error);
+    console.error(error);
     throw error;
   }
 }
 
-module.exports = {
-  generateEmbedding,
-};
+module.exports = {generateEmbedding}

@@ -1,18 +1,18 @@
 // PHASE 1: Intelligent Document Generation Controller
-// Purpose: Automate employment contract creation using OpenAI
+// Purpose: Automate employment contract creation using Ollama (Local LLM)
 
-const OpenAI = require('openai');
 const { PrismaClient } = require('@prisma/client');
+const axios = require('axios'); // Using axios for Ollama API calls
+const puppeteer = require('puppeteer'); // For HTML -> PDF rendering
 
 const prisma = new PrismaClient();
 
-// Initialize OpenAI client with API key from environment
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Ollama configuration
+const OLLAMA_HOST = process.env.OLLAMA_HOST || 'http://localhost:11434';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.1:latest'; // or 'mistral', 'codellama', 'phi'
 
 /**
- * Generate Employment Contract
+ * Generate Employment Contract using Ollama
  * @route POST /api/contract/generate
  * @param {Object} data - Contract details { employeeId, customData }
  * @returns {Object} - Generated HTML contract
@@ -57,48 +57,74 @@ async function generateContract(req, res) {
     }
 
     const { name, role, salary, country } = employeeData;
+    const effectiveDate = req.body.effectiveDate || employeeData.effectiveDate || "1 MARCH 2026";
+    const workLocation = req.body.workLocation || employeeData.workLocation || "Cyberjaya, Malaysia";
+    const annualLeave = "14"; // Standard for Malaysia
+    const sickLeave = "14";
+    
+    // Construct the prompt for Ollama
+    // More detailed prompt for better results with local LLM
+    const prompt = `You are a legal expert specializing in employment law. Create a professional HTML-formatted employment contract.
 
-    // Construct the prompt for OpenAI
-    // This prompt instructs the AI to act as a legal expert and generate
-    // a contract with country-specific labor laws
-    const prompt = `You are a legal expert specializing in employment law. Create a professional HTML-formatted employment contract for the following position:
+EMPLOYMENT CONTRACT DETAILS:
+- Employee Name: ${name}
+- Job Role: ${role}
+- Country: ${country}
+- Monthly Salary: ${salary} (local currency)
+- Effective Date: ${effectiveDate}
+- Office Location: ${workLocation}
+- Annual Leave: ${annualLeave} days
+- Sick Leave: ${sickLeave} days
 
-Role: ${role}
-Country: ${country}
-Salary: ${salary} (local currency)
-Employee Name: ${name}
+SPECIFIC REQUIREMENTS:
+1. Generate a complete employment contract in HTML format
+2. Make it compliant with labor laws of ${country}
+3. Include these sections (use proper HTML tags):
+   - Parties Information (Company and Employee)
+   - Job Title and Description
+   - Compensation and Benefits
+   - Work Hours and Location
+   - Leave and Vacation Policy
+   - Termination Conditions
+   - Confidentiality Agreement
+   - Dispute Resolution
+   - Signatures Section
+4. Use ${country}-specific employment regulations
+5. Add CSS styling for professional appearance
+6. IMPORTANT: Do NOT use placeholders in [BRACKETS]. Use the specific values provided above to fill in every field.
+7. If a specific detail (like a notice period) is not provided, use a standard legal default for ${country} (e.g., 30 days) instead of a placeholder.
+8. Make it legally sound and professional
 
-Requirements:
-1. Include specific labor laws and regulations for ${country}
-2. Add standard employment clauses (probation, termination, confidentiality)
-3. Make it legally sound and professional
-4. Format in clean HTML with proper styling
-5. Include placeholders for signatures and dates
+FORMAT REQUIREMENTS:
+- Use <!DOCTYPE html>
+- Include <head> with basic CSS styles
+- Use semantic HTML tags (section, article, header, footer)
+- Add proper indentation for readability
 
-Generate a complete, production-ready employment contract.`;
+Generate a complete, ready-to-use employment contract in HTML format:`;
 
-    console.log('🤖 Calling OpenAI to generate contract...');
+    console.log('🤖 Calling Ollama to generate contract...');
+    console.log(`Using model: ${OLLAMA_MODEL}`);
 
-    // Call OpenAI API to generate the contract
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o', // Using GPT-4o as specified
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert legal advisor who creates employment contracts that comply with local labor laws.',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      temperature: 0.7, // Balanced creativity and consistency
-      max_tokens: 2000, // Allow for detailed contracts
+    // Call Ollama API
+    const response = await axios.post(`${OLLAMA_HOST}/api/generate`, {
+      model: OLLAMA_MODEL,
+      prompt: prompt,
+      stream: false, // Set to true for streaming responses
+      options: {
+        temperature: 0, // Lower temperature for more consistent legal documents
+        num_predict: 1500, // Increased for longer contracts
+        top_p: 0.9,
+        repeat_penalty: 1.1, // Reduce repetition
+      },
     });
 
-    const generatedContract = completion.choices[0].message.content;
+    let generatedContract = response.data.response;
 
-    console.log('✅ Contract generated successfully');
+    // Clean and format the response
+    generatedContract = generatedContract.trim();
+    
+    console.log('✅ Contract generated successfully using Ollama');
 
     // Return the generated contract to the client
     res.json({
@@ -109,18 +135,132 @@ Generate a complete, production-ready employment contract.`;
         role,
         country,
         salary,
+        model: OLLAMA_MODEL,
         generatedAt: new Date().toISOString(),
       },
     });
   } catch (error) {
     console.error('❌ Error generating contract:', error.message);
+    
+    // Check if Ollama is running
+    if (error.code === 'ECONNREFUSED') {
+      return res.status(503).json({ 
+        success: false,
+        error: 'Ollama service not running',
+        message: 'Please ensure Ollama is installed and running on localhost:11434',
+        instructions: [
+          '1. Install Ollama from https://ollama.ai/',
+          '2. Run: ollama pull llama2',
+          '3. Start Ollama service',
+          '4. Or set OLLAMA_HOST environment variable'
+        ]
+      });
+    }
+
     res.status(500).json({ 
+      success: false,
       error: 'Failed to generate contract',
       message: error.message 
     });
   }
 }
 
+/**
+ * Generate a simple contract template (fallback if Ollama fails)
+ */
+async function generateTemplateContract(employeeData) {
+  const { name, role, salary, country } = employeeData;
+  
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employment Contract - ${name}</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 40px; }
+        .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; }
+        .section { margin: 30px 0; }
+        .signature { margin-top: 100px; }
+        .placeholder { color: #666; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>EMPLOYMENT CONTRACT</h1>
+        <p><strong>Date:</strong> [DATE]</p>
+    </div>
+    
+    <div class="section">
+        <h2>1. PARTIES</h2>
+        <p>This Employment Contract ("Contract") is made between:</p>
+        <p><strong>Employer:</strong> [COMPANY_NAME], a company registered in ${country}</p>
+        <p><strong>Employee:</strong> ${name}</p>
+    </div>
+    
+    <div class="section">
+        <h2>2. POSITION AND DUTIES</h2>
+        <p>The Employee is employed as: <strong>${role}</strong></p>
+        <p>Location: [WORK_LOCATION]</p>
+        <p>The Employee shall perform all duties associated with this position.</p>
+    </div>
+    
+    <div class="section">
+        <h2>3. COMPENSATION</h2>
+        <p>Annual Salary: <strong>${salary}</strong> (${country} currency)</p>
+        <p>Payment: Monthly on the last working day</p>
+        <p>Benefits: As per ${country} labor laws and company policy</p>
+    </div>
+    
+    <div class="section">
+        <h2>4. WORKING HOURS</h2>
+        <p>Standard work week: 40 hours</p>
+        <p>Overtime: As per ${country} regulations</p>
+    </div>
+    
+    <div class="section">
+        <h2>5. TERMINATION</h2>
+        <p>Notice period: As required by ${country} labor law</p>
+        <p>This contract may be terminated by either party with written notice.</p>
+    </div>
+    
+    <div class="signature">
+        <p>_________________________</p>
+        <p><strong>Employer Signature</strong></p>
+        <p>Date: ___________________</p>
+        
+        <p style="margin-top: 50px;">_________________________</p>
+        <p><strong>Employee Signature</strong></p>
+        <p>Date: ___________________</p>
+    </div>
+</body>
+</html>`;
+}
+
+// Render arbitrary HTML (from request body) to PDF and return as attachment
+async function renderHtmlToPdf(req, res) {
+  try {
+    const { html, filename } = req.body;
+    if (!html) return res.status(400).json({ success: false, error: 'html is required' });
+
+    const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+    await browser.close();
+
+    const safeName = (filename || 'document').replace(/[^a-z0-9_.-]/gi, '_');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('❌ renderHtmlToPdf error:', err);
+    return res.status(500).json({ success: false, error: 'Failed to render PDF', message: err.message });
+  }
+}
+
 module.exports = {
   generateContract,
+  generateTemplateContract,
+  renderHtmlToPdf,
 };
