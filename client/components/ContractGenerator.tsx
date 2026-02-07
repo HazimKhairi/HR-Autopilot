@@ -9,6 +9,8 @@ interface ContractData {
   role?: string
   salary?: number
   country?: string
+  effectiveDate?: string
+  workLocation?: string
 }
 
 interface EmployeeData {
@@ -21,18 +23,31 @@ interface EmployeeData {
   leaveBalance: number
 }
 
+
 export default function ContractGenerator() {
   const [useExisting, setUseExisting] = useState(true)
   const [email, setEmail] = useState('')
   const [employeeData, setEmployeeData] = useState<EmployeeData | null>(null)
+  
+  // Get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date()
+    return today.toISOString().split('T')[0]
+  }
+  
   const [formData, setFormData] = useState<ContractData>({
-    name: '',
-    role: '',
-    salary: 0,
-    country: '',
+    name: 'John Wick',
+    role: 'AI Engineer',
+    salary: 8000,
+    country: 'Malaysia',
+    effectiveDate: getTodayDate(),
+    workLocation: 'Cyberjaya, Malaysia',
   })
   const [generatedContract, setGeneratedContract] = useState<string | null>(null)
+  const [editableHtml, setEditableHtml] = useState<string>('')
+  const [isPreview, setIsPreview] = useState<boolean>(true)
   const [loading, setLoading] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
   const [lookupLoading, setLookupLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -85,6 +100,8 @@ export default function ContractGenerator() {
 
       if (data.success) {
         setGeneratedContract(data.contract)
+        setEditableHtml(data.contract || '')
+        setIsPreview(true)
       } else {
         throw new Error(data.error || 'Failed to generate contract')
       }
@@ -202,7 +219,7 @@ export default function ContractGenerator() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Salary</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary</label>
             <input
               type="number"
               value={formData.salary}
@@ -219,6 +236,25 @@ export default function ContractGenerator() {
               onChange={(e) => handleFormChange('country', e.target.value)}
               className="input-field"
               placeholder="Malaysia"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Effective Date</label>
+            <input
+              type="date"
+              value={formData.effectiveDate}
+              onChange={(e) => handleFormChange('effectiveDate', e.target.value)}
+              className="input-field"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Work Location</label>
+            <input
+              type="text"
+              value={formData.workLocation}
+              onChange={(e) => handleFormChange('workLocation', e.target.value)}
+              className="input-field"
+              placeholder="Cyberjaya, Malaysia"
             />
           </div>
         </div>
@@ -244,25 +280,78 @@ export default function ContractGenerator() {
       {/* Generated Contract Display */}
       {generatedContract && (
         <div>
-          <h3 className="font-bold text-lg mb-2 text-gray-800">Generated Contract:</h3>
-          <div
-            className="bg-white border border-gray-300 p-4 overflow-auto max-h-96"
-            style={{ borderRadius: '5px' }}
-            dangerouslySetInnerHTML={{ __html: generatedContract }}
-          />
-          <button
-            onClick={() => {
-              const blob = new Blob([generatedContract], { type: 'text/html' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = 'employment-contract.html'
-              a.click()
-            }}
-            className="btn-secondary w-full mt-3"
-          >
-            Download Contract
-          </button>
+          <h3 className="font-bold text-lg mb-2 text-gray-800">Generated Contract</h3>
+
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setIsPreview(true)}
+              className={`py-1 px-3 text-sm rounded ${isPreview ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+            >
+              Preview
+            </button>
+            <button
+              onClick={() => setIsPreview(false)}
+              className={`py-1 px-3 text-sm rounded ${!isPreview ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+            >
+              Edit
+            </button>
+          </div>
+
+          {isPreview ? (
+            <div
+              className="bg-white border border-gray-300 p-4 overflow-auto max-h-96"
+              style={{ borderRadius: '5px' }}
+              dangerouslySetInnerHTML={{ __html: editableHtml }}
+            />
+          ) : (
+            <textarea
+              value={editableHtml}
+              onChange={(e) => setEditableHtml(e.target.value)}
+              className="w-full h-64 p-3 border border-gray-300 rounded resize-none"
+            />
+          )}
+
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={async () => {
+                if (!editableHtml) return
+                setPdfLoading(true)
+                try {
+                  const filenameBase = (useExisting && employeeData && employeeData.name) || formData.name || 'employment-contract'
+                  // send the current HTML (preview or edited HTML)
+                  const htmlToSend = editableHtml
+
+                  const pdfResp = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contract/render-pdf`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ html: htmlToSend, filename: filenameBase })
+                  })
+
+                  if (pdfResp.ok) {
+                    const blob = await pdfResp.blob()
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `${filenameBase.replace(/[^a-z0-9_-]/gi, '_')}.pdf`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  } else {
+                    console.error('PDF render failed', await pdfResp.text())
+                  }
+                } catch (err) {
+                  console.error('Generate PDF error', err)
+                } finally {
+                  setPdfLoading(false)
+                }
+              }}
+              disabled={pdfLoading}
+              className="btn-primary"
+            >
+              {pdfLoading ? 'Generating PDF...' : 'Generate PDF'}
+            </button>
+
+            
+          </div>
         </div>
       )}
     </div>

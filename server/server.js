@@ -57,6 +57,8 @@ app.get('/api/employee/by-email/:email', employeeController.getEmployeeByEmail);
 // When the Frontend sends a POST request to '/api/contract/generate',
 // run the 'generateContract' function in the docController.
 app.post('/api/contract/generate', docController.generateContract);
+// Render arbitrary HTML to PDF (expects { html, filename } in body)
+app.post('/api/contract/render-pdf', docController.renderHtmlToPdf);
 
 // ========================================
 // PHASE 2: Conversational HR Assistant Routes

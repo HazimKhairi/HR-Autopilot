@@ -48,7 +48,7 @@ export default function RootLayout({
         <footer className="bg-gray-800 text-white py-6 mt-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <p className="text-sm">
-              Built for Hackathon 2024 | Powered by OpenAI GPT-4o
+              Built for Deriv Hackathon 2026
             </p>
           </div>
         </footer>
