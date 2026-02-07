@@ -2,14 +2,12 @@
 // Purpose: Automate employment contract creation using Ollama (Local LLM)
 
 const { PrismaClient } = require('@prisma/client');
-const axios = require('axios'); // Using axios for Ollama API calls
 const puppeteer = require('puppeteer'); // For HTML -> PDF rendering
 
 const prisma = new PrismaClient();
 
-// Ollama configuration
-const OLLAMA_HOST = process.env.OLLAMA_HOST || 'http://localhost:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.1:latest'; // or 'mistral', 'codellama', 'phi'
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+const OLLAMA_CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL || 'llama3.2';
 
 /**
  * Generate Employment Contract using Ollama
@@ -103,23 +101,32 @@ FORMAT REQUIREMENTS:
 
 Generate a complete, ready-to-use employment contract in HTML format:`;
 
-    console.log('🤖 Calling Ollama to generate contract...');
-    console.log(`Using model: ${OLLAMA_MODEL}`);
+    console.log('Calling Ollama to generate contract...');
+    console.log(`Using model: ${OLLAMA_CHAT_MODEL}`);
 
-    // Call Ollama API
-    const response = await axios.post(`${OLLAMA_HOST}/api/generate`, {
-      model: OLLAMA_MODEL,
-      prompt: prompt,
-      stream: false, // Set to true for streaming responses
-      options: {
-        temperature: 0, // Lower temperature for more consistent legal documents
-        num_predict: 1500, // Increased for longer contracts
-        top_p: 0.9,
-        repeat_penalty: 1.1, // Reduce repetition
-      },
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: OLLAMA_CHAT_MODEL,
+        messages: [
+          { role: 'system', content: 'You are a legal expert specializing in employment law. Generate only HTML content, no explanations.' },
+          { role: 'user', content: prompt },
+        ],
+        stream: false,
+        options: {
+          temperature: 0,
+          num_predict: 4096,
+        },
+      }),
     });
 
-    let generatedContract = response.data.response;
+    if (!response.ok) {
+      throw new Error(`Ollama error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    let generatedContract = data.message.content;
 
     // Clean and format the response
     generatedContract = generatedContract.trim();
@@ -135,7 +142,7 @@ Generate a complete, ready-to-use employment contract in HTML format:`;
         role,
         country,
         salary,
-        model: OLLAMA_MODEL,
+        model: OLLAMA_CHAT_MODEL,
         generatedAt: new Date().toISOString(),
       },
     });
@@ -143,16 +150,15 @@ Generate a complete, ready-to-use employment contract in HTML format:`;
     console.error('❌ Error generating contract:', error.message);
     
     // Check if Ollama is running
-    if (error.code === 'ECONNREFUSED') {
-      return res.status(503).json({ 
+    if (error.cause?.code === 'ECONNREFUSED') {
+      return res.status(503).json({
         success: false,
         error: 'Ollama service not running',
         message: 'Please ensure Ollama is installed and running on localhost:11434',
         instructions: [
-          '1. Install Ollama from https://ollama.ai/',
-          '2. Run: ollama pull llama2',
-          '3. Start Ollama service',
-          '4. Or set OLLAMA_HOST environment variable'
+          '1. Install Ollama: brew install ollama',
+          '2. Run: ollama pull llama3.2',
+          '3. Start Ollama: ollama serve',
         ]
       });
     }
