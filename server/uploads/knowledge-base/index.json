@@ -29,6 +29,16 @@
       "uploader": "system",
       "uploadDate": "2026-02-07T18:44:37.705Z",
       "deletedAt": null
+    },
+    {
+      "id": "1770518113677_Algorithm.pdf",
+      "filename": "1770518113677_Algorithm.pdf",
+      "name": "Algorithm",
+      "category": "Other",
+      "description": "this is algortihm exam",
+      "uploader": "admin",
+      "uploadDate": "2026-02-08T02:35:14.146Z",
+      "deletedAt": null
     }
   ]
 }
